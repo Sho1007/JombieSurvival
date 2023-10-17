@@ -18,6 +18,10 @@ void ACharacterBase::BeginPlay()
 	
 }
 
+void ACharacterBase::Die()
+{
+}
+
 // Called every frame
 void ACharacterBase::Tick(float DeltaTime)
 {

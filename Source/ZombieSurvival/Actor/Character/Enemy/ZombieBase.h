@@ -15,8 +15,12 @@ class AItemBase;
 class UAnimMontage;
 class ASpawnManager;
 class APlayerBase;
+class UCapsuleComponent;
+class USkeletalMeshComponent;
+class UAnimInstance;
+class UAudioComponent;
 UCLASS()
-class ZOMBIESURVIVAL_API AZombieBase : public ACharacterBase
+class ZOMBIESURVIVAL_API AZombieBase : public AActor
 {
 	GENERATED_BODY()
 	
@@ -27,6 +31,11 @@ public:
 
 	UFUNCTION(BlueprintCallable)
 	void Attack();
+	UFUNCTION(BlueprintCallable)
+	void EndAttack();
+
+	UFUNCTION(BlueprintCallable)
+	void EndReact();
 	
 	UFUNCTION(BlueprintCallable)
 	void CheckHit();
@@ -39,6 +48,9 @@ public:
 	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
 
 	virtual void DropItem();
+	
+	// FSM
+	void Move(float DeltaTime);
 
 	// Object Pooling
 	UFUNCTION(CallInEditor)
@@ -53,7 +65,24 @@ public:
 	virtual void Respawn();
 
 	FDele_Single OnDied;
+
+private:
+	void PlayAnimMontage(class UAnimMontage* AnimMontage, float InPlayRate = 1.f, FName StartSectionName = NAME_None);
+	void StopAnimMontage(class UAnimMontage* AnimMontage = nullptr);
 protected:
+	// Component
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Zombie", Meta = (AllowPrivateAccess))
+	UCapsuleComponent* CapsuleComponent;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Zombie", Meta = (AllowPrivateAccess))
+	USkeletalMeshComponent* SkeletalMeshComponent;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Zombie", Meta = (AllowPrivateAccess))
+	UAudioComponent* AudioComponent;
+	
+	// Sound
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Zombie", Meta = (AllowPrivateAccess))
+	USoundBase* AmbianceSound;
+
+
 	// Object Pooling
 	ASpawnManager* SpawnManager;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Zombie", Meta = (AllowPrivateAccess))
@@ -64,6 +93,14 @@ protected:
 	// Enemy FSM
 	APlayerBase* Player;
 
+	// Move
+	FVector MoveDirection;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Zombie", Meta = (AllowPrivateAccess))
+	float RespawnDistance;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Zombie", Meta = (AllowPrivateAccess))
+	bool bIsMoving;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Zombie", Meta = (AllowPrivateAccess))
+	float Speed;
 	
 	// Item Loot
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Zombie", Meta = (AllowPrivateAccess))

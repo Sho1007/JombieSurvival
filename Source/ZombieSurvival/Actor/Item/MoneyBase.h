@@ -16,8 +16,13 @@ class ZOMBIESURVIVAL_API AMoneyBase : public AItemBase
 	
 public:
 	virtual void Interact(AActor* InteractActor) override;
+
+	virtual void Deactivate() override;
 	
+	void SetExpAmount(int32 NewExpAmount);
+	void AddExpAmount(int32 NewExpAmount);
+	int GetExpAmount() const;
 protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Meta = (AllowPrivateAccess))
-	int32 MoneyAmount;
+	int32 ExpAmount;
 };

@@ -10,6 +10,7 @@
 #include "ItemBase.generated.h"
 
 class UStaticMeshComponent;
+class ASpawnManager;
 UCLASS()
 class ZOMBIESURVIVAL_API AItemBase : public AActor, public IInteractInterface
 {
@@ -19,17 +20,22 @@ public:
 	// Sets default values for this actor's properties
 	AItemBase();
 
-protected:
-	// Called when the game starts or when spawned
-	virtual void BeginPlay() override;
-
-public:	
-	// Called every frame
-	virtual void Tick(float DeltaTime) override;
-
 	// Inherited via IInteractInterface
 	virtual void Interact(AActor* InteractActor) override;
+
+	void Init(ASpawnManager* NewSpawnManager);
+
+	virtual void Activate();
+	virtual void Deactivate();
+
+	bool IsActive() const;
 protected:
+	// Object Pooling
+	bool bIsActived;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Meta = (AllowPrivateAccess))
+	ASpawnManager* SpawnManager;
+	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Meta = (AllowPrivateAccess))
 	UStaticMeshComponent* StaticMeshComponent;
 };

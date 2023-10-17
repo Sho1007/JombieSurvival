@@ -7,8 +7,12 @@
 #include "SpawnManager.generated.h"
 
 class AZombieBase;
+class AProjectileBase;
 class ABossBase;
 class APlayerBase;
+class AMoneyBase;
+
+struct FStageData;
 UCLASS()
 class ZOMBIESURVIVAL_API ASpawnManager : public AActor
 {
@@ -26,27 +30,47 @@ public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
-	void RespawnMonster(int ObjectIndex);
+	void UpdateStageData(FStageData& NewStageData);
 
+	void RespawnMonster(int ObjectIndex);
+	void SpawnProjectile(FVector ProjectileLocaiton, FRotator ProjectileRotation, FName ProjectileName);
+	void SpawnMoney(FVector MoneyLocation, int NewExpAMount);
+
+	void ReduceActivedMoneyCount();
 private:
 	void SpawnMonster();
 	void SpawnBoss();
-
+	
 	FVector GetSpawnLocation();
 
 	void PrepareMonster();
+	void PrepareProjectile();
+	void PrepareMoney();
 
 private:
-	// Monster Spawn
 	APlayerBase* Player;
+	// Monster ObjectPooling
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Monster Spawn", Meta = (AllowPrivateAccess))
+	int MaxMonsterCount;
 
-	// ObjectPooling
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Monster Spawn", Meta = (AllowPrivateAccess))
-	int32 ObjectPoolingCount;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Monster Spawn", Meta = (AllowPrivateAccess))
-	int32 CurrentSpawnedCount;
+	int32 ZombiePoolingCount;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Monster Spawn", Meta = (AllowPrivateAccess))
 	TArray<AZombieBase*> ZombieArray;
+	
+	// Projectile ObjectPooling
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Projectile Spawn", Meta = (AllowPrivateAccess))
+	int32 ProjectilePoolingCount;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Projectile Spawn", Meta = (AllowPrivateAccess))
+	TArray<AProjectileBase*> ProjectileArray;
+	
+	// Money ObjectPooling
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Money Spawn", Meta = (AllowPrivateAccess))
+	int32 MoneyPoolingCount;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Money Spawn", Meta = (AllowPrivateAccess))
+	int32 ActivedMoneyCount;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Money Spawn", Meta = (AllowPrivateAccess))
+	TArray<AMoneyBase*> MoneyArray;
 
 	// Spawn Time
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Monster Spawn", Meta = (AllowPrivateAccess))
@@ -61,8 +85,13 @@ private:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Monster Spawn", Meta = (AllowPrivateAccess))
 	float MonsterSpawnDistance;
 
+	// class
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Monster Spawn", Meta = (AllowPrivateAccess))
-	TSubclassOf<AZombieBase> ZombieClass;
+	TSubclassOf<AActor> ZombieClass;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Monster Spawn", Meta = (AllowPrivateAccess))
 	TSubclassOf<ABossBase> BossClass;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Projectile Spawn", Meta = (AllowPrivateAccess))
+	TSubclassOf<AProjectileBase> ProjectileClass;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Money Spawn", Meta = (AllowPrivateAccess))
+	TSubclassOf<AMoneyBase> MoneyClass;
 };

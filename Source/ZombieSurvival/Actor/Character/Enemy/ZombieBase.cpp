@@ -6,24 +6,49 @@
 #include <Engine/DamageEvents.h>
 #include <GameFramework/CharacterMovementComponent.h>
 #include <Components/CapsuleComponent.h>
+#include <Components/SkeletalMeshComponent.h>
+#include <Components/AudioComponent.h>
+#include <Kismet/GameplayStatics.h>
 
-#include "../../Weapon/WeaponBase.h"
+#include "../../Weapon/ProjectileBase.h"
 #include "../../Item/ItemBase.h"
 #include "../../SpawnManager.h"
+#include "../Player/PlayerBase.h"
+#include "../../Weapon/ShotGunHitBox.h"
 
 AZombieBase::AZombieBase(const FObjectInitializer& ObjectInitializer)
 {
-	this->AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
+	PrimaryActorTick.bCanEverTick = true;
 
-	this->GetCapsuleComponent()->SetCollisionProfileName(TEXT("BlockOnlyCapsule"));
 
-	this->GetMesh()->SetCollisionProfileName(TEXT("TraceOnlyMesh"));
+	CapsuleComponent = CreateDefaultSubobject<UCapsuleComponent>(TEXT("CapsuleComponent"));
+	SetRootComponent(CapsuleComponent);
+
+	CapsuleComponent->SetCollisionProfileName(TEXT("BlockOnlyCapsule"));
+
+	SkeletalMeshComponent = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("SkeletalMeshComponent"));
+	SkeletalMeshComponent->SetupAttachment(RootComponent);
+
+	SkeletalMeshComponent->SetCollisionProfileName(TEXT("TraceOnlyMesh"));
+
+	AudioComponent = CreateDefaultSubobject<UAudioComponent>(TEXT("AudioComponent"));
+	AudioComponent->SetupAttachment(RootComponent);
 }
 
 void AZombieBase::Tick(float DeltaTime)
 {
+	//UE_LOG(LogTemp, Warning, TEXT("AZombieBase::Tick"));
 	Super::Tick(DeltaTime);
-	UE_LOG(LogTemp, Warning, TEXT("AZombieBase::Tick) Called"));
+
+	if (Player) MoveDirection = Player->GetActorLocation() - GetActorLocation();
+	if (MoveDirection.Length() >= RespawnDistance) Respawn();
+
+	if (!bIsAttacking)
+	{
+		Move(DeltaTime);
+
+		if (bIsAttackable) Attack();
+	}
 }
 
 void AZombieBase::Attack()
@@ -36,13 +61,28 @@ void AZombieBase::Attack()
 
 		StopMoving();
 
+		AudioComponent->SetPaused(true);
 		PlayAnimMontage(AttackMontage);
 	}
 }
 
+void AZombieBase::EndAttack()
+{
+	if (bIsActived)
+	{
+		bIsAttacking = false;
+		AudioComponent->SetPaused(false);
+	}
+}
+
+void AZombieBase::EndReact()
+{
+	if (bIsActived) AudioComponent->SetPaused(false);
+}
+
 void AZombieBase::CheckHit()
 {
-	//UE_LOG(LogTemp, Warning, TEXT("AZombieBase::Attack Called"));
+	//UE_LOG(LogTemp, Warning, TEXT("AZombieBase::CheckHit Called"));
 
 	FHitResult OutHit;
 	FVector Start = GetActorLocation();
@@ -52,18 +92,23 @@ void AZombieBase::CheckHit()
 	if (GetWorld()->LineTraceSingleByChannel(OutHit, Start, End, ECC_Pawn, Params))
 	{
 		//UE_LOG(LogTemp, Warning, TEXT("AZombieBase::CheckHit) Hitted Actor : %s"), *OutHit.GetActor()->GetName());
-		OutHit.GetActor()->TakeDamage(AttackDamage, FDamageEvent(UDamageType::StaticClass()), GetController(), this);
+		OutHit.GetActor()->TakeDamage(AttackDamage, FDamageEvent(UDamageType::StaticClass()), nullptr, this);
+	}
+	else
+	{
+		//UE_LOG(LogTemp, Warning, TEXT("AZombieBase::CheckHit) Check"));
+		SetActorRotation(MoveDirection.Rotation());
 	}
 }
 
 void AZombieBase::StartMoving()
 {
-	GetCharacterMovement()->SetMovementMode(EMovementMode::MOVE_Walking);
+	
 }
 
 void AZombieBase::StopMoving()
 {
-	GetCharacterMovement()->SetMovementMode(EMovementMode::MOVE_None);
+	
 }
 
 float AZombieBase::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
@@ -72,27 +117,27 @@ float AZombieBase::TakeDamage(float DamageAmount, FDamageEvent const& DamageEven
 
 	//UE_LOG(LogTemp, Warning, TEXT("AZombieBase::TakeDamage) %f"), DamageAmount);
 
+	if (bIsActived == false) return 0.0f;
 
-	if (AWeaponBase* WeaponBase = Cast<AWeaponBase>(DamageCauser))
+	AudioComponent->SetPaused(true);
+	if (bIsKnockBackable)
 	{
-		if (bIsKnockBackable)
-		{
-			bIsAttackable = false;
-			bIsAttacking = false;
-			StopMoving();
-			StopAnimMontage();
-			if (HittedMontage) PlayAnimMontage(HittedMontage);
-			AddActorWorldOffset(GetActorForwardVector() * -WeaponBase->GetKnockbackPower(), false, nullptr, ETeleportType::ResetPhysics);
-		}
+		bIsAttackable = false;
+		bIsAttacking = false;
+		StopMoving();
+		StopAnimMontage();
+		if (HittedMontage) PlayAnimMontage(HittedMontage);
+		if (AProjectileBase* Projectile = Cast<AProjectileBase>(DamageCauser)) AddActorWorldOffset(GetActorForwardVector() * -Projectile->GetKnockbackPower(), false, nullptr, ETeleportType::ResetPhysics);
+		else if (AShotGunHitBox* ShotGunHitBox = Cast<AShotGunHitBox>(DamageCauser)) AddActorWorldOffset(GetActorForwardVector() * -ShotGunHitBox->GetKnockBackPower(), false, nullptr, ETeleportType::ResetPhysics);
+	}
 
-		Health -= DamageAmount;
+	Health -= DamageAmount;
 
-		if (Health <= 0.0f)
-		{
-			DropItem();
+	if (Health <= 0.0f)
+	{
+		DropItem();
 
-			this->Disactive();
-		}
+		this->Disactive();
 	}
 
 	return 0.0f;
@@ -100,9 +145,55 @@ float AZombieBase::TakeDamage(float DamageAmount, FDamageEvent const& DamageEven
 
 void AZombieBase::DropItem()
 {
+	SpawnManager->SpawnMoney(GetActorLocation(), 30);
 	for (int i = 0; i < ItemArray.Num(); ++i)
 	{
-		GetWorld()->SpawnActor<AItemBase>(ItemArray[i], GetActorLocation(), FRotator::ZeroRotator);
+		//GetWorld()->SpawnActor<AItemBase>(ItemArray[i], GetActorLocation(), FRotator::ZeroRotator);
+	}
+}
+
+void AZombieBase::Move(float DeltaTime)
+{
+	//UE_LOG(LogTemp, Warning, TEXT("AZombieBase::Move) Called"));
+	if (MoveDirection.Length() >= AttackRange)
+	{
+		bIsAttackable = false;
+		bIsMoving = true;
+		
+		// Todo
+		//GetCharacterMovement()->Velocity = MoveDirection;
+
+		// Rotate
+		SetActorRotation(FMath::Lerp(GetActorRotation(), MoveDirection.Rotation(), 0.5f));
+
+		//UE_LOG(LogTemp, Warning, TEXT("AZombieBase::Tick) Check"));
+
+		FHitResult OutHit;
+		FVector Start = GetActorLocation() + (GetActorForwardVector() * 10.0f);
+		FVector End = Start + (GetActorForwardVector() * 100.0f);
+		FCollisionQueryParams Params;
+		Params.AddIgnoredActor(this);
+		MoveDirection = GetActorForwardVector();
+		if (GetWorld()->LineTraceSingleByChannel(OutHit, Start, End, ECC_Visibility, Params))
+		{
+			if (GetWorld()->LineTraceSingleByChannel(OutHit, Start, End + (GetActorRightVector() * 50.0f), ECC_Visibility, Params))
+			{
+				MoveDirection = -GetActorRightVector();
+			}
+			else
+			{
+				MoveDirection = GetActorRightVector();
+			}
+		}
+
+		MoveDirection.Normalize();
+		//DrawDebugLine(GetWorld(), Start, Start + (MoveDirection * 100.0f), FColor::Yellow, false, 2.0f);
+		AddActorWorldOffset(MoveDirection * Speed * DeltaTime, true);	
+	}
+	else
+	{
+		bIsAttackable = true;
+		bIsMoving = false;
 	}
 }
 
@@ -113,12 +204,10 @@ void AZombieBase::Disactive()
 	SetActorTickEnabled(false);
 	SetActorHiddenInGame(true);
 
-	GetCapsuleComponent()->SetCollisionProfileName(TEXT("NoCollision"));
-	GetMesh()->SetCollisionProfileName(TEXT("NoCollision"));
+	AudioComponent->SetPaused(true);
 
-	GetCharacterMovement()->GravityScale = 0;
-
-	//Cast<AAIController>(GetController())->GetBrainComponent()->StopLogic(TEXT("Actor Disactived"));
+	CapsuleComponent->SetCollisionProfileName(TEXT("NoCollision"));
+	SkeletalMeshComponent->SetCollisionProfileName(TEXT("NoCollision"));
 }
 
 void AZombieBase::Active()
@@ -129,18 +218,27 @@ void AZombieBase::Active()
 	StopAnimMontage();
 	bIsAttackable = false;
 	bIsAttacking = false;
+
 	
-	this->GetCapsuleComponent()->SetCollisionProfileName(TEXT("BlockOnlyCapsule"));
+	
+	AudioComponent->Play(FMath::RandRange(0.0f, AmbianceSound->Duration));	
+	AudioComponent->SetPaused(false);
+	
+	CapsuleComponent->SetCollisionProfileName(TEXT("BlockOnlyCapsule"));
 
-	this->GetMesh()->SetCollisionProfileName(TEXT("TraceOnlyMesh"));
-
-	GetCharacterMovement()->GravityScale = 1;
+	SkeletalMeshComponent->SetCollisionProfileName(TEXT("TraceOnlyMesh"));
 
 	Health = MaxHealth;
 
 	StartMoving();
 
 	SetActorHiddenInGame(false);
+
+	if (AmbianceSound)
+	{
+		AudioComponent->SetSound(AmbianceSound);
+		AudioComponent->Play();
+	}
 }
 
 bool AZombieBase::IsActive() const
@@ -159,4 +257,35 @@ void AZombieBase::Init(APlayerBase* NewPlayer, ASpawnManager* NewSpawnManager, i
 void AZombieBase::Respawn()
 {
 	SpawnManager->RespawnMonster(ObjectIndex);
+}
+
+void AZombieBase::PlayAnimMontage(class UAnimMontage* AnimMontage, float InPlayRate, FName StartSectionName)
+{
+	UAnimInstance* AnimInstance = SkeletalMeshComponent->GetAnimInstance();
+
+	if (AnimMontage && AnimInstance)
+	{
+		float const Duration = AnimInstance->Montage_Play(AnimMontage, InPlayRate);
+
+		if (Duration > 0.f)
+		{
+			// Start at a given Section.
+			if (StartSectionName != NAME_None)
+			{
+				AnimInstance->Montage_JumpToSection(StartSectionName, AnimMontage);
+			}
+		}
+	}
+}
+
+void AZombieBase::StopAnimMontage(UAnimMontage* AnimMontage)
+{
+	UAnimInstance* AnimInstance = (SkeletalMeshComponent) ? SkeletalMeshComponent->GetAnimInstance() : nullptr;
+	UAnimMontage* MontageToStop = (AnimMontage) ? AnimMontage : AnimInstance->GetCurrentActiveMontage();
+	bool bShouldStopMontage = AnimInstance && MontageToStop && !AnimInstance->Montage_GetIsStopped(MontageToStop);
+
+	if (bShouldStopMontage)
+	{
+		AnimInstance->Montage_Stop(MontageToStop->BlendOut.GetBlendTime(), MontageToStop);
+	}
 }

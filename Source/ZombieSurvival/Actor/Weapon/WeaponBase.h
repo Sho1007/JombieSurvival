@@ -45,7 +45,4 @@ private:
 	float AttackCoolTime;
 
 	float CurrentAttackCoolTime;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon", Meta = (AllowPrivateAccess))
-	USkeletalMeshComponent* SkeletalMeshComponent;
 };
